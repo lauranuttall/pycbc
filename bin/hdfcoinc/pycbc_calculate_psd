@@ -20,6 +20,8 @@ parser.add_argument("--segment-name", help="Name of segment list to use")
 parser.add_argument("--cores", default=1, type=int)
 parser.add_argument("--psd-recalculate-segments", type=int, default=0)
 parser.add_argument("--output-file", required=True)
+parser.add_argument("--variance", default=False,
+                  help="Calculate variance of each psd")
 
 pycbc.psd.insert_psd_option_group(parser, output=False)
 pycbc.strain.insert_strain_option_group(parser, gps_times=False)
@@ -62,16 +64,25 @@ def get_psd((seg, i)):
 
     logging.info('%d: calculating psd', i)
     lpsd = []
+    lvar = []
     nsegs = args.psd_recalculate_segments
     nsegs = nsegs if nsegs != 0 else len(strain_segments.full_segment_slices)
     groups = grouper(nsegs, strain_segments.full_segment_slices)
     
     for psegs in groups:
         strain_part = gwstrain[psegs[0].start:psegs[-1].stop]
-        psd = pycbc.psd.from_cli(args, flen, delta_f, flow, strain_part, pycbc.DYN_RANGE_FAC)        
-        lpsd.append((psd.numpy(), psd.delta_f, int(strain_part.start_time), int(strain_part.end_time)))
+        if args.variance:
+            psd, var = pycbc.psd.from_cli(args, flen, delta_f, flow, strain_part, pycbc.DYN_RANGE_FAC)
+            lpsd.append((psd.numpy(), psd.delta_f, int(strain_part.start_time), int(strain_part.end_time)))
+            lvar.append((var.numpy(), var.delta_f, int(strain_part.start_time), int(strain_part.end_time)))
+        else:
+            psd = pycbc.psd.from_cli(args, flen, delta_f, flow, strain_part, pycbc.DYN_RANGE_FAC)        
+            lpsd.append((psd.numpy(), psd.delta_f, int(strain_part.start_time), int(strain_part.end_time)))
 
-    return lpsd
+    if args.variance:
+        return lpsd, lvar
+    else:
+        return lpsd
 
 # Determine what times to calculate PSDs for
 ifo = args.channel_name[0:2]
@@ -91,17 +102,47 @@ psds = psds.get()
 # Store the PSDs in an hdf file, include some basic metadata
 f = h5py.File(args.output_file, 'w')
 inc, start, end = 0, [], []
-for gpsd in psds:
-    for psd_numpy, psd_delta_f, s, e in gpsd:
-        logging.info('writing psd %d', inc)
-        key = ifo + '/psds/' + str(inc)
-        start.append(int(s))
-        end.append(int(e))
-        f.create_dataset(key, data= (psd_numpy), 
-                         compression='gzip', compression_opts=9, shuffle=True)
-        f[key].attrs['epoch'] = int(s)
-        f[key].attrs['delta_f'] = float(psd_delta_f)
-        inc += 1
+if args.variance:
+    for all_psd in psds:
+        ind = 0
+        for gpsd in all_psd:
+            if ind ==0:
+                for psd_numpy, psd_delta_f, s, e in gpsd:
+                    logging.info('writing psd %d', inc)
+                    key = ifo + '/psds/' + str(inc)
+                    start.append(int(s))
+                    end.append(int(e))
+                    f.create_dataset(key, data= (psd_numpy),
+                                     compression='gzip',
+                                     compression_opts=9, shuffle=True)
+                    f[key].attrs['epoch'] = int(s)
+                    f[key].attrs['delta_f'] = float(psd_delta_f)
+                ind += 1
+            else:
+                for var_numpy, var_delta_f, s, e in gpsd:
+                    logging.info('writing var %d', inc)
+                    key1 = ifo + '/vars/' + str(inc)
+                    #start.append(int(s))
+                    #end.append(int(e))
+                    f.create_dataset(key1, data= (var_numpy),
+                                     compression='gzip',
+                                     compression_opts=9, shuffle=True)
+                    f[key1].attrs['epoch'] = int(s)
+                    f[key1].attrs['delta_f'] = float(var_delta_f)
+                inc += 1
+else:
+    for gpsd in psds:
+        for psd_numpy, psd_delta_f, s, e in gpsd:
+            logging.info('writing psd %d', inc)
+            key = ifo + '/psds/' + str(inc)
+            start.append(int(s))
+            end.append(int(e))
+            f.create_dataset(key, data= (psd_numpy), 
+                             compression='gzip', compression_opts=9, 
+                             shuffle=True)
+            f[key].attrs['epoch'] = int(s)
+            f[key].attrs['delta_f'] = float(psd_delta_f)
+            inc += 1
 
 f[ifo + '/start_time'] = numpy.array(start, dtype=numpy.uint32)
 f[ifo + '/end_time'] = numpy.array(end, dtype=numpy.uint32)
