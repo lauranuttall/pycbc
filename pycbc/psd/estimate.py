@@ -53,7 +53,7 @@ def median_bias(n):
     return ans
 
 def welch(timeseries, seg_len=4096, seg_stride=2048, window='hann', \
-        avg_method='median'):
+        avg_method='median', variance=None):
     """PSD estimator based on Welch's method.
 
     Parameters
@@ -68,6 +68,8 @@ def welch(timeseries, seg_len=4096, seg_stride=2048, window='hann', \
         Function used to window segments before Fourier transforming.
     avg_method : {'median', 'mean', 'median-mean'}
         Method used for averaging individual segment PSDs.
+    variance :
+        Option to return the variance of the PSD calculated
 
     Returns
     -------
@@ -149,6 +151,15 @@ def welch(timeseries, seg_len=4096, seg_stride=2048, window='hann', \
         psd = (odd_median + even_median) / 2
 
     psd *= 2 * delta_f * seg_len / (w*w).sum()
+
+    if variance:
+        var = numpy.var(segment_psds, axis=0)
+        var *= 2 * delta_f * seg_len / (w*w).sum()
+        rpsd = FrequencySeries(psd, delta_f=delta_f, dtype=timeseries.dtype)
+        rvar = FrequencySeries(var, delta_f=delta_f, dtype=timeseries.dtype)
+        return rpsd, rvar
+    else:
+        return FrequencySeries(psd, delta_f=delta_f, dtype=timeseries.dtype)
 
     return FrequencySeries(psd, delta_f=delta_f, dtype=timeseries.dtype)
 
