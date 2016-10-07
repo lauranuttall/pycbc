@@ -472,6 +472,7 @@ setup (
                'bin/workflows/pycbc_create_uberbank_workflow',
                'bin/pycbc_compress_bank',
                'bin/pycbc_ringinj',
+               'bin/pycbc_make_online_detchar_workflow',
                ],
     packages = [
                'pycbc',
