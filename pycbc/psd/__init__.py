@@ -86,14 +86,25 @@ def from_cli(opt, length, delta_f, low_frequency_cutoff,
     elif opt.psd_estimation and not (opt.psd_model or 
                                      opt.psd_file or opt.asd_file):
         # estimate PSD from data
-        psd = welch(strain, avg_method=opt.psd_estimation,
-                    seg_len=int(opt.psd_segment_length * sample_rate),
-                    seg_stride=int(opt.psd_segment_stride * sample_rate),
-                    num_segments=opt.psd_num_segments,
-                    require_exact_data_fit=False)
+        if opt.variance:
+            psd, psd16 = welch(strain, avg_method=opt.psd_estimation,
+                        seg_len=int(opt.psd_segment_length * sample_rate),
+                        seg_stride=int(opt.psd_segment_stride * sample_rate),
+                        num_segments=opt.psd_num_segments,
+                        require_exact_data_fit=False, variance=True)
+        else:
+            psd = welch(strain, avg_method=opt.psd_estimation,
+                        seg_len=int(opt.psd_segment_length * sample_rate),
+                        seg_stride=int(opt.psd_segment_stride * sample_rate),
+                        num_segments=opt.psd_num_segments,
+                        require_exact_data_fit=False)
 
         if delta_f != psd.delta_f:
-            psd = interpolate(psd, delta_f)
+            if opt.variance:
+                psd = interpolate(psd, delta_f)
+                psd16 = interpolate(psd16, delta_f)
+            else:
+                psd = interpolate(psd, delta_f)
     else:
         # no PSD options given
         return None

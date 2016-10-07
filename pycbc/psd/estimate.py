@@ -53,7 +53,8 @@ def median_bias(n):
     return ans
 
 def welch(timeseries, seg_len=4096, seg_stride=2048, window='hann', \
-        avg_method='median', num_segments=None, require_exact_data_fit=False):
+        avg_method='median', num_segments=None, require_exact_data_fit=False, \
+        variance=None):
     """PSD estimator based on Welch's method.
 
     Parameters
@@ -171,7 +172,13 @@ def welch(timeseries, seg_len=4096, seg_stride=2048, window='hann', \
 
     psd *= 2 * delta_f * seg_len / (w*w).sum()
 
-    return FrequencySeries(psd, delta_f=delta_f, dtype=timeseries.dtype)
+    if variance:
+      segment_psds *= 2 * delta_f * seg_len / (w*w).sum()
+      rpsd = FrequencySeries(psd, delta_f=delta_f, dtype=timeseries.dtype)
+      rpsd16 = FrequencySeries(segment_psds, delta_f=delta_f, dtype=timeseries.dtype)
+      return rpsd, rpsd16
+    else:
+      return FrequencySeries(psd, delta_f=delta_f, dtype=timeseries.dtype)
 
 def inverse_spectrum_truncation(psd, max_filter_len, low_frequency_cutoff=None, trunc_method=None):
     """Modify a PSD such that the impulse response associated with its inverse
